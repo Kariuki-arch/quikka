@@ -6,6 +6,10 @@
       "destination": "https://intasend-backend-test-437347949704.europe-west1.run.app/api/:path*"
     },
     {
+      "source": "/r/:short_code",
+      "destination": "https://intasend-backend-test-437347949704.europe-west1.run.app/api/payments/r/:short_code"
+    },
+    {
       "source": "/checkout/:path*",
       "has": [
         {

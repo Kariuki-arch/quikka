@@ -18,6 +18,12 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Route /r/ to backend redirect
+    location /r/ {
+        proxy_pass ${BACKEND_URL}/payments/r/;
+        proxy_ssl_server_name on;
+    }
+
     # Route /receipt requests
     location /receipt {
         try_files $uri $uri/ /receipt.html;
