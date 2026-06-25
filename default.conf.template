@@ -1,0 +1,51 @@
+map $http_user_agent $is_bot {
+    default 0;
+    ~*(WhatsApp|Twitterbot|facebookexternalhit|LinkedInBot|Pinterest|Googlebot|Discordbot|TelegramBot) 1;
+}
+
+server {
+    listen 4321;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index landing.html;
+
+    # Route /checkout requests
+    location /checkout {
+        if ($is_bot) {
+            rewrite ^/checkout/(.*)$ /api/orders/seo/checkout/$1 last;
+        }
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Route /receipt requests
+    location /receipt {
+        try_files $uri $uri/ /receipt.html;
+    }
+
+    # Route /@handle to profile.html
+    location ~ ^/@ {
+        try_files $uri $uri/ /profile.html;
+    }
+
+    # Route privacy to privacy.html
+    location = /privacy {
+        try_files /privacy.html =404;
+    }
+
+    # Route terms to terms.html
+    location = /terms {
+        try_files /terms.html =404;
+    }
+
+    # Fallback all other routes to landing.html
+    location / {
+        try_files $uri $uri/ /landing.html;
+    }
+
+    # Proxy /api requests to the backend Cloud Run service
+    location /api/ {
+        proxy_pass ${BACKEND_URL}/;
+        proxy_ssl_server_name on;
+    }
+}

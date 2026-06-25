@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Merchant Profile</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .hide-scrollbars::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbars {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+  <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <meta property="og:title" content="Quikka">
+  <meta property="og:description" content="Secure payments and fast checkout with Quikka.">
+  <meta property="og:image" content="/assets/logo-web.png">
+</head>
+<body class="bg-white min-h-screen text-slate-800 antialiased">
+  
+  <div class="max-w-md mx-auto min-h-screen p-6 py-12 flex flex-col gap-6" id="app">
+    <div class="animate-pulse flex flex-col items-center gap-4">
+      <div class="rounded-full bg-slate-200 h-24 w-24"></div>
+      <div class="h-6 bg-slate-200 rounded w-1/2"></div>
+      <div class="h-4 bg-slate-200 rounded w-1/3"></div>
+      <div class="h-10 bg-slate-200 rounded-full w-3/4 mt-4"></div>
+    </div>
+  </div>
+
+  <script>
+    const BACKEND_URL = "/api";
+    
+    // Parse /@Handle from URL
+    const path = window.location.pathname;
+    let handle = "";
+    if (path.startsWith('/@')) {
+      handle = path.substring(2).split('/')[0];
+    } else {
+      const qs = new URLSearchParams(window.location.search);
+      handle = qs.get("handle") || "";
+    }
+    
+    async function initProfile() {
+      if (!handle) {
+        renderError("No merchant profile specified.");
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/merchants/handle/${handle}`);
+        if (!response.ok) throw new Error("Merchant not found");
+        
+        const merchant = await response.json();
+        renderProfile(merchant);
+        
+        // Fetch and render storefront items
+        fetchMerchantOrders(merchant.id);
+      } catch (err) {
+        renderError(err.message);
+      }
+    }
+
+    async function fetchMerchantOrders(merchantId) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/orders/merchant/${merchantId}`);
+        if (!response.ok) return; // Silent fail for storefront
+        const orders = await response.json();
+        
+        // Filter active orders
+        const activeOrders = orders.filter(o => o.status === 'pending_buyer' && o.available_quantity > 0);
+        
+        if (activeOrders.length > 0) {
+          renderStorefront(activeOrders);
+        }
+      } catch (err) {
+        console.error("Could not load storefront items:", err);
+      }
+    }
+
+    function renderStorefront(orders) {
+      const container = document.getElementById('storefront-container');
+      if (!container) return;
+
+      const itemsHtml = orders.map(order => `
+        <div class="snap-start shrink-0 w-64 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          ${order.image_url ? `
+            <div class="relative h-48 bg-slate-900 flex items-center justify-center overflow-hidden">
+              <img src="${order.image_url}" alt="" class="absolute inset-0 w-full h-full object-cover scale-125 filter blur-xl opacity-60">
+              <img src="${order.image_url}" alt="${order.item_desc}" class="relative z-10 w-full h-full object-contain p-2 drop-shadow-lg">
+            </div>
+          ` : `
+            <div class="h-48 bg-slate-100 flex items-center justify-center border-b border-slate-200">
+              <span class="text-4xl opacity-50">🛍️</span>
+            </div>
+          `}
+          <div class="p-4 flex flex-col flex-grow">
+            <h3 class="font-bold text-slate-800 text-lg line-clamp-2 mb-1">${order.item_desc}</h3>
+            <p class="text-green-600 font-extrabold mb-4">KES ${order.item_price.toLocaleString()}</p>
+            <div class="mt-auto">
+              <a href="/checkout/${order.tracking_code}" class="block w-full text-center bg-[#00A859] hover:bg-green-600 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-md">
+                Buy Now
+              </a>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      container.innerHTML = `
+        <h2 class="text-xl font-extrabold mb-1 px-1">Available Items</h2>
+        <p class="text-sm text-slate-500 mb-4 px-1 leading-relaxed">Swipe to view available stock.</p>
+        <div class="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 px-1 hide-scrollbars">
+          ${itemsHtml}
+        </div>
+      `;
+      container.classList.remove('hidden');
+    }
+
+    function renderError(msg) {
+      document.getElementById('app').innerHTML = `
+        <div class="text-center py-10">
+          <h2 class="text-2xl font-bold text-red-600 mb-2">Profile Not Found</h2>
+          <p class="text-slate-600">${msg}</p>
+        </div>
+      `;
+    }
+
+    function resolveOrder(event) {
+      event.preventDefault();
+      const input = document.getElementById("orderCodeInput").value.trim();
+      if (!input) return;
+      window.location.href = "/checkout/" + input;
+    }
+
+    function openBookingModal(serviceId, serviceName, price) {
+      // Stub: Future home of the Quikka calendar and time slot picker.
+      // For now we simulate the interaction:
+      const phone = prompt(`Book ${serviceName} (KES ${price})\n\nWhat is your WhatsApp number?`);
+      if(!phone) return;
+
+      const date = prompt(`When would you like this appointment? (e.g. Tomorrow at 2PM)`);
+      if(!date) return;
+
+      submitBookingRequest(serviceId, phone, date);
+    }
+
+    async function submitBookingRequest(serviceId, buyerPhone, requestedTime) {
+      try {
+        const response = await fetch(`${BACKEND_URL}/merchants/handle/${handle}`);
+        if (!response.ok) throw new Error("Merchant not found");
+        
+        const merchant = await response.json();
+        const merchantId = merchant.id;
+
+        // Stubbed endpoint for booking (matches Phase 3 of plan)
+        const reqResponse = await fetch(`${BACKEND_URL}/merchants/${merchantId}/bookings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                service_id: serviceId,
+                client_phone: buyerPhone,
+                appointment_date: requestedTime // Note: Schema holds strictly typed date/time, so this string is a temporary mock
+            })
+        });
+
+        alert("Booking request submitted! The merchant will confirm on WhatsApp.");
+      } catch(err) {
+        alert("Could not submit booking: " + err.message);
+      }
+    }
+
+    async function requestOrder(event) {
+      event.preventDefault();
+      
+      const form = event.target;
+      const message = form.querySelector('textarea').value.trim();
+      const phone = form.querySelector('input[type="tel"]').value.trim();
+      const button = form.querySelector('button[type="submit"]');
+
+      if (!message || !phone) return;
+
+      const originalText = button.textContent;
+      button.textContent = "Sending...";
+      button.disabled = true;
+
+      try {
+        // Need merchant data for ID, we fetch it if available globally or fetch again.
+        // Let's rely on the Handle in URL:
+        const response = await fetch(`${BACKEND_URL}/merchants/handle/${handle}`);
+        if (!response.ok) throw new Error("Merchant not found");
+        
+        const merchant = await response.json();
+        const merchantId = merchant.id;
+
+        const reqResponse = await fetch(`${BACKEND_URL}/merchants/${merchantId}/contact`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: message,
+                buyer_phone: phone
+            })
+        });
+
+        if (!reqResponse.ok) {
+            throw new Error("Failed to send request.");
+        }
+
+        alert("Request sent to merchant! They will follow up on WhatsApp.");
+        form.reset();
+      } catch(err) {
+        alert("Could not send request: " + err.message);
+      } finally {
+        button.textContent = originalText;
+        button.disabled = false;
+      }
+    }
+
+    function renderProfile(merchant) {
+      const app = document.getElementById('app');
+      
+      // Clean avatar url formatting
+      const avatarHandle = merchant.primary_social_handle.startsWith('@') 
+        ? merchant.primary_social_handle.substring(1) 
+        : merchant.primary_social_handle;
+      
+      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(merchant.display_name)}&background=0F172A&color=fff&size=256&bold=true`;
+      
+      app.innerHTML = `
+        <!-- Header -->
+        <div class="flex flex-col items-center text-center px-4">
+          <img src="${avatarUrl}" alt="${merchant.display_name}" class="h-28 w-28 rounded-full shadow-md border-4 border-white mb-4 object-cover">
+          
+          <h1 class="text-2xl font-bold flex items-center gap-2 justify-center">
+            ${merchant.display_name}
+            ${merchant.verified ? '<svg class="w-6 h-6 text-blue-500 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>' : ''}
+          </h1>
+          
+          ${merchant.tagline ? `<p class="text-slate-500 mt-2 font-medium">${merchant.tagline}</p>` : ''}
+          
+          <div class="mt-4 bg-slate-100 px-4 py-1.5 rounded-full text-sm font-semibold text-slate-700 shadow-sm border border-slate-200 inline-flex items-center gap-2">
+            🌟 Verified Seller <span class="text-slate-300">|</span> 📦 ${merchant.dispatches_count || 0} Dispatches
+          </div>
+        </div>
+
+        <!-- Utility Links -->
+        <div class="flex gap-3 px-2 mt-2 w-full">
+           <a href="https://wa.me/${merchant.phone.replace(/[^0-9]/g, '')}" target="_blank" rel="noopener noreferrer" 
+              class="flex-1 flex justify-center items-center gap-2 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800 font-semibold py-3 px-4 rounded-2xl transition-all shadow-sm">
+              <svg class="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.305-.888-.656-1.488-1.466-1.662-1.764-.173-.298-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51h-.57c-.198 0-.52.074-.792.347-.272.273-1.04 1.02-1.04 2.48s1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+              WhatsApp
+           </a>
+           <a href="https://instagram.com/${avatarHandle}" target="_blank" rel="noopener noreferrer" 
+              class="flex-1 flex justify-center items-center gap-2 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800 font-semibold py-3 px-4 rounded-2xl transition-all shadow-sm">
+              <svg class="w-5 h-5 text-pink-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+              Instagram
+           </a>
+        </div>
+
+        <!-- Code Resolver Card -->
+        <div class="bg-[#F9FAFB] border border-slate-200 rounded-3xl p-6 shadow-sm w-full mt-4">
+          <h2 class="text-xl font-extrabold mb-1">Secure Checkout</h2>
+          <p class="text-sm text-slate-500 mb-5 leading-relaxed">Have an Order Tracking Code from DMs? Enter it below to pay securely.</p>
+          <form onsubmit="resolveOrder(event)">
+            <input type="text" id="orderCodeInput" class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3.5 mb-3 text-lg font-mono focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm" placeholder="e.g. kx9T2vM8" required>
+            <button type="submit" class="w-full bg-[#00A859] hover:bg-green-600 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-md">
+              Find My Order
+            </button>
+          </form>
+        </div>
+
+        <!-- Storefront Container -->
+        <div id="storefront-container" class="w-full mt-4 hidden"></div>
+
+        <!-- Book a Service Card -->
+        ${(merchant.services && merchant.services.length > 0) ? `
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm w-full mt-2">
+          <h2 class="text-lg font-bold mb-1">Book a Service</h2>
+          <p class="text-sm text-slate-500 mb-4">Select a service to request an appointment below.</p>
+          <div class="flex flex-col gap-3">
+            ${merchant.services.map(service => `
+              <div class="flex items-center justify-between p-3 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-slate-100/80 transition-colors cursor-pointer" onclick="openBookingModal(${service.id}, '${service.name}', ${service.price})">
+                <div>
+                  <h3 class="font-semibold text-slate-800">${service.name}</h3>
+                  <p class="text-xs text-slate-500">${service.duration_minutes} Minutes</p>
+                </div>
+                <div class="text-right">
+                  <span class="font-bold text-green-600 block">KES ${service.price}</span>
+                  <span class="text-xs font-semibold text-slate-400">Book →</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- Lead Generation Card -->
+        <div class="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm w-full mt-2">
+          <h2 class="text-lg font-bold mb-1">Request an Order</h2>
+          <p class="text-sm text-slate-500 mb-4">Want something custom or not listed? Drop a request.</p>
+          <form onsubmit="requestOrder(event)" class="space-y-3">
+            <textarea placeholder="What are you looking for?" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 min-h-[80px]" required></textarea>
+            <input type="tel" placeholder="Your WhatsApp Number" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400" required>
+            <button type="submit" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-sm">
+              Send Request
+            </button>
+          </form>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center pb-4">
+          <p class="text-xs text-slate-400 font-medium tracking-wide">
+            🔒 PAYMENTS & LOGISTICS TRACKING POWERED BY <span class="text-green-600 font-bold">QUIKKA</span>
+          </p>
+        </div>
+      `;
+    }
+
+    // Init
+    initProfile();
+  </script>
+</body>
+</html>

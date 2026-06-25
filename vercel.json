@@ -1,0 +1,44 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://intasend-backend-test-437347949704.europe-west1.run.app/api/:path*"
+    },
+    {
+      "source": "/checkout/:path*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(WhatsApp|Twitterbot|facebookexternalhit|LinkedInBot|Pinterest|Googlebot|Discordbot|TelegramBot).*"
+        }
+      ],
+      "destination": "https://intasend-backend-test-437347949704.europe-west1.run.app/api/orders/seo/checkout/:path*"
+    },
+    {
+      "source": "/checkout/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/receipt/:path*",
+      "destination": "/receipt.html"
+    },
+    {
+      "source": "/@:handle",
+      "destination": "/profile.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/landing.html"
+    }
+  ]
+}
