@@ -36,9 +36,9 @@ export async function POST(req: NextRequest) {
         [order_id]
       );
       const sold = parseInt(purchasesRes.rows[0].sold) || 0;
-      const available = order.total_quantity - sold;
+      const available = order.total_quantity > 0 ? order.total_quantity - sold : 999999;
 
-      if (quantity > available) {
+      if (order.total_quantity > 0 && quantity > available) {
         await client.query("ROLLBACK");
         return NextResponse.json(
           { detail: `Sorry, only ${available} items remain! Someone just bought the rest.` },

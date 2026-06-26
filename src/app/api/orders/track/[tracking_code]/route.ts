@@ -13,7 +13,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ trac
       return NextResponse.json({ detail: "Order not found" }, { status: 404 });
     }
 
-    return NextResponse.json(result.rows[0]);
+    const order = result.rows[0];
+
+    // Calculate available_quantity
+    const purchasesRes = await pool.query(
+      "SELECT SUM(quantity) as sold FROM purchases WHERE order_id = $1 AND status != 'failed' AND status != 'canceled'",
+      [order.id]
+    );
+    const sold = parseInt(purchasesRes.rows[0].sold) || 0;
+    
+    // total_quantity = 0 means unlimited
+    order.available_quantity = order.total_quantity > 0 ? order.total_quantity - sold : 999999;
+
+    return NextResponse.json(order);
   } catch (error: any) {
     console.error("Order fetch error:", error);
     return NextResponse.json({ detail: "Internal Server Error" }, { status: 500 });
