@@ -15,9 +15,23 @@ export async function GET() {
           id SERIAL PRIMARY KEY,
           display_name VARCHAR(100) NOT NULL,
           phone VARCHAR(20),
-          wallet_id VARCHAR(50)
+          wallet_id VARCHAR(50),
+          preferred_payment_number VARCHAR(20)
         )
       `);
+
+      // Add preferred_payment_number if the table already existed before this update
+      try {
+        await client.query("SAVEPOINT pre_alter");
+        await client.query("ALTER TABLE merchants ADD COLUMN preferred_payment_number VARCHAR(20)");
+        await client.query("RELEASE SAVEPOINT pre_alter");
+      } catch (e: any) {
+        await client.query("ROLLBACK TO SAVEPOINT pre_alter");
+        // Ignore column already exists error (42701)
+        if (e.code !== '42701') {
+          console.warn("Could not alter merchants table:", e.message);
+        }
+      }
 
       // Create Orders Table
       await client.query(`
@@ -51,6 +65,14 @@ export async function GET() {
           mpesa_receipt VARCHAR(50),
           escrow_status VARCHAR(50) DEFAULT 'pending_escrow',
           sms_sent BOOLEAN DEFAULT false
+        )
+      `);
+      // Create Bot States Table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS bot_states (
+          phone_number VARCHAR(20) PRIMARY KEY,
+          state VARCHAR(50) NOT NULL DEFAULT 'idle',
+          data TEXT
         )
       `);
 

@@ -27,7 +27,8 @@ function getSqliteDb(): any {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       display_name TEXT NOT NULL,
       phone TEXT,
-      wallet_id TEXT
+      wallet_id TEXT,
+      preferred_payment_number TEXT
     );
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,6 +56,11 @@ function getSqliteDb(): any {
       mpesa_receipt TEXT,
       escrow_status TEXT DEFAULT 'pending_escrow',
       sms_sent INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS bot_states (
+      phone_number TEXT PRIMARY KEY,
+      state TEXT NOT NULL DEFAULT 'idle',
+      data TEXT
     );
   `);
 

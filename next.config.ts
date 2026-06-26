@@ -6,12 +6,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/",
-        destination: "/landing.html",
-      },
-      {
         source: "/checkout/:path*",
-        destination: "/index.html",
+        destination: "/checkout.html",
       },
       {
         source: "/receipt",
