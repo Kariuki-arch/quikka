@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 
-// Basic auth fetch for IntaSend API
-async function intasendFetch(endpoint: string, method: string) {
-  const token = process.env.INTASEND_LIVE_TOKEN || process.env.INTASEND_TEST_TOKEN;
-  const baseUrl = process.env.INTASEND_TEST_MODE?.toLowerCase() === "true" 
-    ? "https://sandbox.intasend.com/api/v1" 
-    : "https://payment.intasend.com/api/v1";
+// @ts-ignore
+import IntaSend from "intasend-node";
 
-  const response = await fetch(`${baseUrl}${endpoint}`, {
-    method,
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Accept": "application/json"
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`IntaSend API Error: ${response.status}`);
-  }
-  return response.json();
-}
+const intasend = new IntaSend(
+  process.env.INTASEND_PUB_KEY,
+  process.env.INTASEND_LIVE_TOKEN || process.env.INTASEND_TEST_TOKEN,
+  process.env.INTASEND_TEST_MODE?.toLowerCase() === "true"
+);
 
 function verifyBotToken(req: NextRequest) {
   const token = req.headers.get("x-bot-token");
@@ -49,7 +37,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ phon
     // Fetch available balance from IntaSend wallet if it exists
     if (merchant.wallet_id) {
       try {
-        const walletsData = await intasendFetch(`/wallets/${merchant.wallet_id}/`, "GET");
+        const wallets = intasend.wallets();
+        const walletsData = await wallets.get(merchant.wallet_id);
         availableBalance = parseFloat(walletsData.current_balance || 0);
       } catch (err: any) {
         console.error("Error fetching IntaSend wallet:", err.message);

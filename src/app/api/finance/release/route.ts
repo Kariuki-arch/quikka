@@ -2,30 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import crypto from "crypto";
 
-// Basic auth fetch for IntaSend API
-async function intasendFetch(endpoint: string, method: string, body: any) {
-  const token = process.env.INTASEND_LIVE_TOKEN || process.env.INTASEND_TEST_TOKEN;
-  const baseUrl = process.env.INTASEND_TEST_MODE?.toLowerCase() === "true" 
-    ? "https://sandbox.intasend.com/api/v1" 
-    : "https://payment.intasend.com/api/v1";
+// @ts-ignore
+import IntaSend from "intasend-node";
 
-  const response = await fetch(`${baseUrl}${endpoint}`, {
-    method,
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-
-  if (!response.ok) {
-    const errorData = await response.text();
-    console.error("IntaSend API Error:", response.status, errorData);
-    throw new Error(`IntaSend API Error: ${response.status}`);
-  }
-  return response.json();
-}
+const intasend = new IntaSend(
+  process.env.INTASEND_PUB_KEY,
+  process.env.INTASEND_LIVE_TOKEN || process.env.INTASEND_TEST_TOKEN,
+  process.env.INTASEND_TEST_MODE?.toLowerCase() === "true"
+);
 
 function verifyBotToken(req: NextRequest) {
   const token = req.headers.get("x-bot-token");
@@ -60,7 +44,8 @@ export async function POST(req: NextRequest) {
         const short_uuid = crypto.randomBytes(4).toString("hex");
         const label = `Quikka-Merchant-${merchant.id}-${short_uuid}`;
         try {
-          const walletRes = await intasendFetch("/wallets/", "POST", {
+          const wallets = intasend.wallets();
+          const walletRes = await wallets.create({
             currency: "KES",
             label: label,
             can_disburse: true
@@ -94,12 +79,8 @@ export async function POST(req: NextRequest) {
 
       // Transfer funds from Settlement Wallet to Merchant Working Wallet
       try {
-        await intasendFetch("/wallets/intra-transfer/", "POST", {
-          wallet_id: settlementWallet,
-          destination: merchant.wallet_id,
-          amount: transferAmount,
-          narrative: `Escrow Release for Purchase ${purchase.id}`
-        });
+        const wallets = intasend.wallets();
+        await wallets.intraTransfer(settlementWallet, merchant.wallet_id, transferAmount, `Escrow Release for Purchase ${purchase.id}`);
 
         // Update purchase status
         await client.query("UPDATE purchases SET escrow_status = 'cleared' WHERE id = $1", [purchase.id]);

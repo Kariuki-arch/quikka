@@ -23,10 +23,23 @@ export async function POST(req: NextRequest) {
         
         await client.query("BEGIN");
         
-        const res = await client.query("SELECT * FROM purchases WHERE id = $1 FOR UPDATE", [purchaseId]);
+        const res = await client.query(`
+          SELECT 
+            p.*, 
+            o.item_desc, 
+            o.item_price, 
+            o.available_quantity,
+            o.merchant_order_number,
+            m.phone as merchant_phone
+          FROM purchases p
+          JOIN orders o ON p.order_id = o.id
+          JOIN merchants m ON o.merchant_id = m.id
+          WHERE p.id = $1 
+          FOR UPDATE OF p
+        `, [purchaseId]);
         const purchase = res.rows[0];
 
-        if (purchase) {
+        if (purchase && purchase.status !== 'completed') {
           const updateRes = await client.query(
             "UPDATE purchases SET status = 'completed', mpesa_receipt = $1, escrow_status = 'pending_escrow' WHERE id = $2 RETURNING *",
             [payload.mpesa_reference, purchaseId]
@@ -60,11 +73,26 @@ export async function POST(req: NextRequest) {
              if (internalKey) {
                  headers["X-Bot-Token"] = internalKey;
              }
+             const botPayload = { 
+                 action: "payment_verified", 
+                 purchase_id: purchaseId,
+                 rich_payload: true,
+                 merchant_phone: purchase.merchant_phone,
+                 display_order_id: purchase.merchant_order_number || purchaseId,
+                 short_token: updatedPurchase.receipt_token ? updatedPurchase.receipt_token.substring(0, 8).toUpperCase() : String(purchaseId),
+                 item_desc: purchase.item_desc,
+                 quantity: updatedPurchase.quantity || 1,
+                 item_price: purchase.item_price,
+                 location_display: updatedPurchase.location_text ? `📍 Location: ${updatedPurchase.location_text}` : "📍 Location: Not provided",
+                 buyer_phone: updatedPurchase.buyer_phone || "Not provided",
+                 remaining_display: purchase.available_quantity > 900000 ? "Unlimited" : purchase.available_quantity
+             };
+             
              // Send notification to bot
              await fetch(`${botUrl}/internal/trigger`, {
                  method: "POST",
                  headers,
-                 body: JSON.stringify({ action: "payment_verified", purchase_id: purchaseId }),
+                 body: JSON.stringify(botPayload),
                  // No direct timeout in standard fetch, but usually safe for a quick fire
              });
           } catch (botErr) {

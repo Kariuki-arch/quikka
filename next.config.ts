@@ -2,9 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["better-sqlite3"],
-  allowedDevOrigins: ["2793-102-210-28-18.ngrok-free.app"],
+  allowedDevOrigins: ["2793-102-210-28-18.ngrok-free.app", "f968-102-210-28-36.ngrok-free.app"],
   async rewrites() {
     return [
+      {
+        source: "/",
+        destination: "/index.html",
+      },
       {
         source: "/checkout/:path*",
         destination: "/checkout.html",
